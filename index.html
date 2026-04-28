@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#6c63ff">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(err => console.log('SW registration failed: ', err));
+    }
+  </script>
+
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>برنامج المصروفات - نور</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #6c63ff;
+      --primary-dark: #4f46e5;
+      --secondary: #06b6d4;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --bg: #0f0f1a;
+      --bg2: #16162a;
+      --bg3: #1e1e35;
+      --card: #1a1a2e;
+      --border: #2a2a4a;
+      --text: #e2e8f0;
+      --text2: #94a3b8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: "Cairo", sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* AUTH */
+    #authScreen {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(ellipse at center, #1a1a3e 0%, #0f0f1a 70%);
+      padding: 20px;
+    }
+    .auth-box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 40px 35px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 25px 60px rgba(108,99,255,0.2);
+    }
+    .auth-logo { font-size: 48px; text-align: center; margin-bottom: 10px; }
+    .auth-title {
+      font-size: 24px; font-weight: 900; text-align: center; margin-bottom: 5px;
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .auth-sub { text-align: center; color: var(--text2); font-size: 13px; margin-bottom: 25px; }
+    .tab-row {
+      display: flex; gap: 4px; background: var(--bg3); border-radius: 12px;
+      padding: 4px; margin-bottom: 25px;
+    }
+    .tab-row button {
+      flex: 1; padding: 10px; border: none; border-radius: 9px;
+      font-family: "Cairo", sans-serif; font-size: 14px; font-weight: 700; cursor: pointer; transition: 0.3s;
+    }
+    .tab-row button.active {
+      background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white;
+    }
+    .tab-row button:not(.active) { background: none; color: var(--text2); }
+    .field { margin-bottom: 16px; }
+    .field label { display: block; font-size: 13px; color: var(--text2); font-weight: 600; margin-bottom: 7px; }
+    .field input {
+      width: 100%; padding: 13px 15px; background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 12px; color: var(--text); font-size: 15px; font-family: "Cairo", sans-serif; transition: 0.3s;
+    }
+    .field input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(108,99,255,0.15); }
+    .btn-auth {
+      width: 100%; padding: 14px; background: linear-gradient(135deg, var(--primary), var(--secondary));
+      border: none; border-radius: 12px; color: white; font-size: 16px; font-family: "Cairo", sans-serif;
+      font-weight: 700; cursor: pointer; transition: 0.3s; margin-top: 5px;
+    }
+    .btn-auth:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(108,99,255,0.4); }
+    .auth-msg { text-align: center; font-size: 13px; margin-top: 12px; min-height: 20px; }
+    .auth-msg.err { color: var(--danger); }
+    .auth-msg.ok { color: var(--success); }
+    .loading-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+      z-index: 9999; align-items: center; justify-content: center; flex-direction: column; gap: 15px;
+    }
+    .loading-overlay.show { display: flex; }
+    .spinner {
+      width: 50px; height: 50px; border: 4px solid var(--border);
+      border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* APP */
+    #app { display: none; }
+    .topbar {
+      background: var(--card); border-bottom: 1px solid var(--border);
+      padding: 14px 20px; display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .topbar h1 {
+      font-size: 18px; font-weight: 900;
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .topbar-right { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .tbtn {
+      padding: 7px 14px; border-radius: 10px; border: 1px solid var(--border);
+      background: var(--bg3); color: var(--text); font-family: "Cairo", sans-serif;
+      font-size: 13px; cursor: pointer; transition: 0.2s;
+    }
+    .tbtn:hover { border-color: var(--primary); color: var(--primary); }
+    .tbtn.danger { border-color: var(--danger); color: var(--danger); }
+    .sync-badge {
+      font-size: 11px; padding: 4px 10px; border-radius: 20px;
+      background: rgba(16,185,129,0.15); color: var(--success); font-weight: 700;
+    }
+    .sync-badge.offline { background: rgba(245,158,11,0.15); color: var(--warning); }
+
+    /* TABS */
+    .tabs-bar {
+      background: var(--bg2); border-bottom: 1px solid var(--border);
+      padding: 0 15px; display: flex; gap: 4px; overflow-x: auto;
+    }
+    .tab-btn {
+      padding: 13px 18px; background: none; border: none; border-bottom: 3px solid transparent;
+      color: var(--text2); font-family: "Cairo", sans-serif; font-size: 14px; font-weight: 600;
+      cursor: pointer; transition: 0.2s; white-space: nowrap;
+    }
+    .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+    /* CONTENT */
+    .main-content { padding: 20px; max-width: 1000px; margin: auto; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 18px; padding: 20px; margin-bottom: 18px; }
+    .card-title { font-size: 16px; font-weight: 700; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+    .card-title span { font-size: 19px; }
+    .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; }
+    .f label { display: block; font-size: 12px; color: var(--text2); font-weight: 600; margin-bottom: 6px; }
+    .f input, .f select {
+      width: 100%; padding: 11px 13px; background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 11px; color: var(--text); font-size: 14px; font-family: "Cairo", sans-serif; transition: 0.3s;
+    }
+    .f input:focus { outline: none; border-color: var(--primary); }
+    .f input[readonly] { background: var(--bg2); color: var(--primary); font-weight: 700; }
+    .result-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+    .rbox { border-radius: 14px; padding: 16px; text-align: center; }
+    .rbox .rl { font-size: 11px; opacity: 0.9; margin-bottom: 6px; }
+    .rbox .rv { font-size: 20px; font-weight: 900; }
+    .rb-i { background: linear-gradient(135deg, #10b981, #34d399); }
+    .rb-e { background: linear-gradient(135deg, #ef4444, #f87171); }
+    .rb-s { background: linear-gradient(135deg, #6c63ff, #818cf8); }
+    .rb-w { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
+    .add-row { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+    .add-row input {
+      flex: 1; min-width: 100px; padding: 10px 13px; background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 11px; color: var(--text); font-size: 14px; font-family: "Cairo", sans-serif; transition: 0.3s;
+    }
+    .add-row input:focus { outline: none; border-color: var(--primary); }
+    .btn-add {
+      padding: 10px 18px; background: linear-gradient(135deg, var(--primary), var(--secondary));
+      border: none; border-radius: 11px; color: white; font-family: "Cairo", sans-serif;
+      font-size: 14px; font-weight: 700; cursor: pointer;
+    }
+    .exp-list { display: flex; flex-direction: column; gap: 7px; }
+    .exp-item {
+      display: flex; justify-content: space-between; align-items: center;
+      background: var(--bg3); border-radius: 11px; padding: 11px 14px; border: 1px solid var(--border);
+    }
+    .exp-item .ei-name { font-size: 14px; font-weight: 600; }
+    .exp-item .ei-date { font-size: 11px; color: var(--text2); }
+    .exp-item .ei-amt { font-size: 15px; font-weight: 700; color: var(--warning); margin-left: 10px; }
+    .exp-item .ei-del {
+      background: none; border: none; color: var(--danger); cursor: pointer;
+      font-size: 15px; padding: 4px 7px; border-radius: 7px;
+    }
+    .exp-total {
+      margin-top: 10px; padding: 11px; background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.3); border-radius: 11px;
+      font-weight: 700; text-align: center; color: #f87171; font-size: 14px;
+    }
+    .comment-box {
+      width: 100%; padding: 13px; background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 11px; color: var(--text); font-family: "Cairo", sans-serif;
+      font-size: 14px; resize: vertical; min-height: 80px; transition: 0.3s;
+    }
+    .comment-box:focus { outline: none; border-color: var(--primary); }
+    .action-bar { display: flex; gap: 10px; flex-wrap: wrap; }
+    .btn-p {
+      padding: 12px 22px; background: linear-gradient(135deg, var(--primary), var(--secondary));
+      border: none; border-radius: 12px; color: white; font-family: "Cairo", sans-serif;
+      font-size: 14px; font-weight: 700; cursor: pointer; transition: 0.2s;
+    }
+    .btn-p:hover { transform: translateY(-1px); }
+    .btn-s {
+      padding: 12px 22px; background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 12px; color: var(--text); font-family: "Cairo", sans-serif;
+      font-size: 14px; font-weight: 700; cursor: pointer; transition: 0.2s;
+    }
+    .btn-s:hover { border-color: var(--primary); color: var(--primary); }
+    .btn-g {
+      padding: 12px 22px; background: linear-gradient(135deg, var(--success), #34d399);
+      border: none; border-radius: 12px; color: white; font-family: "Cairo", sans-serif;
+      font-size: 14px; font-weight: 700; cursor: pointer;
+    }
+    .btn-w {
+      padding: 12px 22px; background: linear-gradient(135deg, var(--warning), #fbbf24);
+      border: none; border-radius: 12px; color: white; font-family: "Cairo", sans-serif;
+      font-size: 14px; font-weight: 700; cursor: pointer;
+    }
+
+    /* MODALS */
+    .modal-bg {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+      z-index: 500; align-items: flex-start; justify-content: center; padding: 20px; overflow-y: auto;
+    }
+    .modal-bg.open { display: flex; }
+    .modal-card {
+      background: var(--card); border: 1px solid var(--border); border-radius: 22px;
+      padding: 30px; max-width: 720px; width: 100%; margin: auto;
+    }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .modal-header h2 { font-size: 20px; font-weight: 900; }
+    .report-section { margin-bottom: 18px; }
+    .report-section h3 { font-size: 15px; font-weight: 700; color: var(--primary); border-bottom: 1px solid var(--border); padding-bottom: 7px; margin-bottom: 10px; }
+    .report-row { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px dashed var(--border); font-size: 13px; }
+    .report-row:last-child { border: none; }
+    .report-total { font-size: 17px; font-weight: 700; }
+    .analysis-item { display: flex; justify-content: space-between; padding: 8px 10px; background: var(--bg3); border-radius: 9px; margin-bottom: 6px; font-size: 13px; }
+    .analysis-bar { height: 7px; background: linear-gradient(90deg, var(--primary), var(--secondary)); border-radius: 3px; margin: 3px 0 8px; }
+    .tip-item { padding: 10px 12px; border-radius: 9px; margin-bottom: 8px; font-size: 13px; border-right: 3px solid var(--primary); background: rgba(108,99,255,0.1); }
+    .tip-item.warn { background: rgba(245,158,11,0.1); border-color: var(--warning); }
+    .tip-item.good { background: rgba(16,185,129,0.1); border-color: var(--success); }
+    .archive-item {
+      display: flex; justify-content: space-between; align-items: center; padding: 13px;
+      background: var(--bg3); border-radius: 11px; margin-bottom: 8px; cursor: pointer;
+      border: 1px solid var(--border); transition: 0.2s;
+    }
+    .archive-item:hover { border-color: var(--primary); }
+    .archive-item.cur { border-color: var(--primary); background: rgba(108,99,255,0.1); }
+    .archive-item .ai-name { font-weight: 700; font-size: 14px; }
+    .archive-item .ai-sv { font-size: 12px; color: var(--success); margin-top: 2px; }
+    .ai-del { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 15px; padding: 4px 8px; border-radius: 7px; }
+
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    @media (max-width: 600px) {
+      .topbar { flex-wrap: wrap; gap: 8px; }
+      .main-content { padding: 12px; }
+      .card { padding: 15px; }
+    }
+    @media print {
+      .topbar, .tabs-bar, .action-bar, .modal-header .btn-s { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div class="loading-overlay" id="loader">
+  <div class="spinner"></div>
+  <div style="color:var(--text2);font-size:14px;">جارٍ التحميل...</div>
+</div>
+
+<!-- AUTH -->
+<div id="authScreen">
+  <div class="auth-box">
+    <div class="auth-logo">💰</div>
+    <div class="auth-title">برنامج المصروفات</div>
+    <div class="auth-sub">بياناتك محفوظة على السحابة وتظهر على كل أجهزتك</div>
+    <div class="tab-row">
+      <button id="loginTab" class="active" onclick="switchAuthTab('login')">تسجيل الدخول</button>
+      <button id="regTab" onclick="switchAuthTab('register')">حساب جديد</button>
+    </div>
+
+    <!-- LOGIN -->
+    <div id="loginForm">
+      <div class="field"><label>البريد الإلكتروني</label><input type="email" id="loginEmail" placeholder="example@gmail.com" /></div>
+      <div class="field"><label>كلمة المرور</label><input type="password" id="loginPass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()" /></div>
+      <button class="btn-auth" onclick="doLogin()">دخول</button>
+      <div class="auth-msg err" id="loginErr"></div>
+    </div>
+
+    <!-- REGISTER -->
+    <div id="registerForm" style="display:none;">
+      <div class="field"><label>البريد الإلكتروني</label><input type="email" id="regEmail" placeholder="example@gmail.com" /></div>
+      <div class="field"><label>كلمة المرور (4 أحرف على الأقل)</label><input type="password" id="regPass" placeholder="••••••••" /></div>
+      <div class="field"><label>تأكيد كلمة المرور</label><input type="password" id="regConfirm" placeholder="••••••••" onkeydown="if(event.key==='Enter')doRegister()" /></div>
+      <button class="btn-auth" onclick="doRegister()">إنشاء الحساب</button>
+      <div class="auth-msg" id="regMsg"></div>
+    </div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <div class="topbar">
+    <div>
+      <h1>💰 برنامج المصروفات</h1>
+      <div style="font-size:11px;color:var(--text2);margin-top:2px;" id="userLabel"></div>
+    </div>
+    <div class="topbar-right">
+      <span class="sync-badge" id="syncBadge">☁️ متزامن</span>
+      <button class="tbtn" onclick="openArchive()">📁 الأشهر</button>
+      <button class="tbtn" onclick="addNewMonth()">➕ شهر جديد</button>
+      <button class="tbtn danger" onclick="doLogout()">🔒 خروج</button>
+    </div>
+  </div>
+  <div class="tabs-bar" id="tabsBar"></div>
+  <div class="main-content" id="mainContent"></div>
+</div>
+
+<!-- REPORT MODAL -->
+<div class="modal-bg" id="reportModal">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h2>📋 التقرير الشهري</h2>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-p" onclick="window.print()" style="padding:8px 14px;font-size:13px;">🖨️ طباعة</button>
+        <button class="btn-s" onclick="document.getElementById('reportModal').classList.remove('open')" style="padding:8px 14px;font-size:13px;">✕</button>
+      </div>
+    </div>
+    <div id="reportBody"></div>
+  </div>
+</div>
+
+<!-- ARCHIVE MODAL -->
+<div class="modal-bg" id="archiveModal">
+  <div class="modal-card" style="max-width:460px;">
+    <div class="modal-header">
+      <h2>📁 سجل الأشهر</h2>
+      <button class="btn-s" onclick="document.getElementById('archiveModal').classList.remove('open')" style="padding:8px 14px;font-size:13px;">✕</button>
+    </div>
+    <div id="archiveList"></div>
+  </div>
+</div>
+
+<!-- FIREBASE SDKs -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, setDoc, getDoc, collection, getDocs, deleteDoc, onSnapshot }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDgXAhmeE-h_oqiTU9-D1YtWGtZixelSd4",
+  authDomain: "noor-70ea7.firebaseapp.com",
+  projectId: "noor-70ea7",
+  storageBucket: "noor-70ea7.firebasestorage.app",
+  messagingSenderId: "952094251396",
+  appId: "1:952094251396:web:9b07578d0b675817f0e5d1",
+  measurementId: "G-8XBYZFGRXR"
+};
+
+const fbApp = initializeApp(firebaseConfig);
+const auth = getAuth(fbApp);
+const db = getFirestore(fbApp);
+
+// ======= AUTH HELPERS =======
+const loader = document.getElementById("loader");
+function showLoader(){ loader.classList.add("show"); }
+function hideLoader(){ loader.classList.remove("show"); }
+
+window.switchAuthTab = (tab) => {
+  document.getElementById("loginForm").style.display = tab==="login"?"block":"none";
+  document.getElementById("registerForm").style.display = tab==="register"?"block":"none";
+  document.getElementById("loginTab").className = tab==="login"?"active":"";
+  document.getElementById("regTab").className = tab==="register"?"active":"";
+};
+
+window.doLogin = async () => {
+  const email = document.getElementById("loginEmail").value.trim();
+  const pass = document.getElementById("loginPass").value;
+  const err = document.getElementById("loginErr");
+  err.textContent = "";
+  if(!email||!pass){err.textContent="❌ أدخل الإيميل وكلمة المرور";return;}
+  const btn = document.querySelector(".btn-auth");
+  btn.textContent = "جاري الدخول...";
+  btn.disabled = true;
+  try {
+    await signInWithEmailAndPassword(auth, email, pass);
+  } catch(e) {
+    btn.textContent = "دخول";
+    btn.disabled = false;
+    if(e.code==="auth/invalid-credential"||e.code==="auth/wrong-password"||e.code==="auth/user-not-found")
+      err.textContent = "❌ الإيميل أو كلمة المرور غلط";
+    else err.textContent = "❌ " + e.message;
+  }
+};
+
+window.doRegister = async () => {
+  const email = document.getElementById("regEmail").value.trim();
+  const pass = document.getElementById("regPass").value;
+  const confirm = document.getElementById("regConfirm").value;
+  const msg = document.getElementById("regMsg");
+  msg.className = "auth-msg";
+  msg.textContent = "";
+  if(!email){msg.className="auth-msg err";msg.textContent="❌ أدخل البريد الإلكتروني";return;}
+  if(pass.length < 6){msg.className="auth-msg err";msg.textContent="❌ كلمة المرور 6 أحرف على الأقل";return;}
+  if(pass!==confirm){msg.className="auth-msg err";msg.textContent="❌ كلمتا المرور غير متطابقتين";return;}
+  showLoader();
+  try {
+    await createUserWithEmailAndPassword(auth, email, pass);
+    msg.className="auth-msg ok"; msg.textContent="✅ تم إنشاء الحساب بنجاح!";
+  } catch(e) {
+    hideLoader();
+    if(e.code==="auth/email-already-in-use") msg.className="auth-msg err", msg.textContent="❌ هذا الإيميل مسجل بالفعل";
+    else msg.className="auth-msg err", msg.textContent="❌ " + e.message;
+  }
+};
+
+window.doLogout = async () => {
+  await signOut(auth);
+  location.reload();
+};
+
+// ======= APP STATE =======
+let months = [];
+let activeIdx = 0;
+let currentUID = null;
+let unsubscribe = null;
+
+const arabicMonths = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+function monthLabel(m){
+  const d = new Date(m.date||Date.now());
+  return arabicMonths[d.getMonth()]+" "+d.getFullYear();
+}
+function createMonth(dateStr){
+  return {
+    id: Date.now().toString(),
+    date: dateStr||new Date().toISOString().slice(0,10),
+    salary1:"", salary2:"", salary3:"",
+    fixedExpenses:[{name:"القسط",amount:""},{name:"مصروف البيت",amount:""}],
+    variableExpenses:[],
+    comment:"", closed:false
+  };
+}
+
+// ======= FIRESTORE =======
+async function saveMonth(idx) {
+  const m = months[idx];
+  try {
+    await setDoc(doc(db,"users",currentUID,"months",m.id), m);
+    setSyncBadge(true);
+    showToast("💾 تم الحفظ والمزامنة ✅");
+  } catch(e) {
+    setSyncBadge(false);
+    showToast("⚠️ خطأ في الحفظ: "+e.message);
+  }
+}
+
+async function deleteMonthFromDB(id) {
+  try { await deleteDoc(doc(db,"users",currentUID,"months",id)); } catch(e){}
+}
+
+function setSyncBadge(online){
+  const b = document.getElementById("syncBadge");
+  if(online){ b.textContent="☁️ متزامن"; b.className="sync-badge"; }
+  else { b.textContent="⚠️ غير متزامن"; b.className="sync-badge offline"; }
+}
+
+function listenToMonths(){
+  if(unsubscribe) unsubscribe();
+  const colRef = collection(db,"users",currentUID,"months");
+
+  // Show a simple loading text in main content
+  document.getElementById("mainContent").innerHTML = `
+    <div style="text-align:center;padding:60px 20px;color:var(--text2);">
+      <div style="font-size:40px;margin-bottom:15px;">⏳</div>
+      <div style="font-size:16px;">جاري تحميل بياناتك...</div>
+    </div>`;
+
+  unsubscribe = onSnapshot(colRef, (snap) => {
+    const loaded = [];
+    snap.forEach(d => loaded.push(d.data()));
+    loaded.sort((a,b)=> new Date(a.date)-new Date(b.date));
+    months = loaded;
+    if(months.length===0){ months=[createMonth(new Date().toISOString().slice(0,10))]; saveMonth(0); return; }
+    activeIdx = Math.min(activeIdx, months.length-1);
+    setSyncBadge(true);
+    renderAll();
+  }, (err)=>{
+    setSyncBadge(false);
+    document.getElementById("mainContent").innerHTML = `
+      <div style="text-align:center;padding:60px 20px;color:var(--danger);">
+        <div style="font-size:40px;margin-bottom:15px;">⚠️</div>
+        <div style="font-size:16px;">خطأ في الاتصال بقاعدة البيانات</div>
+        <div style="font-size:13px;color:var(--text2);margin-top:8px;">${err.message}</div>
+        <button class="btn-p" onclick="location.reload()" style="margin-top:20px;">🔄 إعادة المحاولة</button>
+      </div>`;
+  });
+}
+
+// ======= AUTH STATE =======
+onAuthStateChanged(auth, (user)=>{
+  hideLoader();
+  if(user){
+    currentUID = user.uid;
+    document.getElementById("authScreen").style.display="none";
+    document.getElementById("app").style.display="block";
+    document.getElementById("userLabel").textContent="مرحباً، "+user.email;
+    listenToMonths();
+  } else {
+    document.getElementById("authScreen").style.display="flex";
+    document.getElementById("app").style.display="none";
+  }
+});
+
+// Safety timeout - if still loading after 8 seconds, hide loader
+setTimeout(()=>hideLoader(), 8000);
+
+// ======= RENDER =======
+function renderAll(){ renderTabs(); renderPage(activeIdx); }
+
+function renderTabs(){
+  document.getElementById("tabsBar").innerHTML = months.map((m,i)=>`
+    <button class="tab-btn ${i===activeIdx?"active":""}" onclick="switchTab(${i})">
+      ${monthLabel(m)} ${m.closed?"🔒":""}
+    </button>`).join("");
+}
+
+window.switchTab = (i)=>{ activeIdx=i; renderAll(); };
+
+function renderPage(idx){
+  const m = months[idx];
+  const ts = (parseFloat(m.salary1)||0)+(parseFloat(m.salary2)||0)+(parseFloat(m.salary3)||0);
+  const fe = m.fixedExpenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+  const ve = m.variableExpenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+  const te = fe+ve;
+  const sv = ts-te;
+  const dis = m.closed?"disabled":"";
+
+  document.getElementById("mainContent").innerHTML = `
+    <div class="card">
+      <div class="card-title"><span>📅</span> الشهر</div>
+      <div class="grid-2">
+        <div class="f"><label>التاريخ</label><input type="date" value="${m.date}" onchange="upField(${idx},'date',this.value)" ${dis}/></div>
+        <div class="f"><label>الشهر</label><input type="text" value="${monthLabel(m)}" readonly/></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span>💵</span> الدخل الشهري</div>
+      <div class="grid-3">
+        <div class="f"><label>مرتب المستشفى الأولى</label><input type="number" value="${m.salary1}" placeholder="المرتب" onchange="upField(${idx},'salary1',this.value)" ${dis}/></div>
+        <div class="f"><label>مرتب المستشفى الثانية</label><input type="number" value="${m.salary2}" placeholder="المرتب" onchange="upField(${idx},'salary2',this.value)" ${dis}/></div>
+        <div class="f"><label>مرتب إضافي</label><input type="number" value="${m.salary3}" placeholder="المرتب" onchange="upField(${idx},'salary3',this.value)" ${dis}/></div>
+        <div class="f"><label>إجمالي المرتبات</label><input type="number" value="${ts.toFixed(2)}" readonly/></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span>🏠</span> المصروفات الثابتة</div>
+      ${m.fixedExpenses.map((fe,fi)=>`
+        <div class="add-row" style="margin-bottom:8px;">
+          <input type="text" value="${fe.name}" placeholder="اسم المصروف" onchange="upFixed(${idx},${fi},'name',this.value)" ${dis} style="flex:1.5;"/>
+          <input type="number" value="${fe.amount}" placeholder="المبلغ" onchange="upFixed(${idx},${fi},'amount',this.value)" ${dis} style="flex:1;"/>
+          ${m.closed?"":`<button class="btn-add" style="background:linear-gradient(135deg,#ef4444,#f87171);" onclick="rmFixed(${idx},${fi})">✕</button>`}
+        </div>`).join("")}
+      ${m.closed?"":`<button class="btn-s" onclick="addFixed(${idx})" style="margin-top:4px;padding:9px 16px;font-size:13px;">+ بند ثابت</button>`}
+      <div class="exp-total">إجمالي الثابت: ${fe.toFixed(2)} ج</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span>🛒</span> مصروفات يومية متراكمة</div>
+      ${m.closed?"":`
+      <div class="add-row">
+        <input type="text" id="vn_${idx}" placeholder="اسم المصروف (مثال: لبن، بامبرز)"/>
+        <input type="number" id="va_${idx}" placeholder="المبلغ"/>
+        <button class="btn-add" onclick="addVar(${idx})">+ إضافة</button>
+      </div>`}
+      <div class="exp-list">
+        ${m.variableExpenses.map((ve,vi)=>`
+          <div class="exp-item">
+            <div><div class="ei-name">${ve.name}</div><div class="ei-date">${ve.date||""}</div></div>
+            <div style="display:flex;align-items:center;">
+              <div class="ei-amt">${parseFloat(ve.amount).toFixed(2)} ج</div>
+              ${m.closed?"":`<button class="ei-del" onclick="rmVar(${idx},${vi})">🗑</button>`}
+            </div>
+          </div>`).join("")}
+      </div>
+      <div class="exp-total">إجمالي المتراكم: ${ve.toFixed(2)} ج</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span>📊</span> النتيجة</div>
+      <div class="result-grid">
+        <div class="rbox rb-i"><div class="rl">إجمالي الدخل</div><div class="rv">${ts.toFixed(2)} ج</div></div>
+        <div class="rbox rb-e"><div class="rl">إجمالي المصروفات</div><div class="rv">${te.toFixed(2)} ج</div></div>
+        <div class="rbox ${sv>=0?"rb-s":"rb-e"}"><div class="rl">${sv>=0?"المدخر":"العجز"}</div><div class="rv">${Math.abs(sv).toFixed(2)} ج</div></div>
+        <div class="rbox rb-w"><div class="rl">نسبة الإنفاق</div><div class="rv">${ts>0?((te/ts)*100).toFixed(1):0}%</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span>📝</span> ملاحظات</div>
+      <textarea class="comment-box" id="commentBox_${idx}" placeholder="ملاحظاتك هنا..." ${dis}>${m.comment||""}</textarea>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span>⚡</span> إجراءات</div>
+      <div class="action-bar">
+        <button class="btn-p" onclick="saveMonthBtn(${idx})">☁️ حفظ ومزامنة</button>
+        <button class="btn-g" onclick="openReport(${idx})">📋 تقرير</button>
+        ${m.closed
+          ?`<button class="btn-s" onclick="reopenMonth(${idx})">🔓 فتح للتعديل</button>`
+          :`<button class="btn-w" onclick="closeMonth(${idx})">🔒 إغلاق الشهر</button>`}
+        <button class="btn-s" onclick="addNewMonth()">➕ شهر جديد</button>
+      </div>
+    </div>
+  `;
+}
+
+// ======= FIELD UPDATES =======
+window.upField = (idx,key,val)=>{
+  months[idx][key]=val;
+  if(["salary1","salary2","salary3","date"].includes(key)){ renderAll(); }
+};
+window.upFixed = (idx,fi,key,val)=>{ months[idx].fixedExpenses[fi][key]=val; renderPage(idx); };
+window.addFixed = (idx)=>{ months[idx].fixedExpenses.push({name:"بند جديد",amount:""}); renderPage(idx); };
+window.rmFixed = (idx,fi)=>{ months[idx].fixedExpenses.splice(fi,1); renderPage(idx); };
+window.addVar = (idx)=>{
+  const n=document.getElementById("vn_"+idx).value.trim()||"مصروف";
+  const a=parseFloat(document.getElementById("va_"+idx).value)||0;
+  if(a<=0){showToast("⚠️ أدخل مبلغ صحيح");return;}
+  months[idx].variableExpenses.push({name:n,amount:a,date:new Date().toLocaleDateString("ar-EG")});
+  document.getElementById("vn_"+idx).value="";
+  document.getElementById("va_"+idx).value="";
+  renderPage(idx);
+};
+window.rmVar = (idx,vi)=>{ months[idx].variableExpenses.splice(vi,1); renderPage(idx); };
+
+window.saveMonthBtn = async (idx)=>{
+  const cb=document.getElementById("commentBox_"+idx);
+  if(cb) months[idx].comment=cb.value;
+  await saveMonth(idx);
+};
+
+window.closeMonth = async (idx)=>{
+  if(!confirm("هل تريد إغلاق هذا الشهر ومنع التعديل؟")) return;
+  const cb=document.getElementById("commentBox_"+idx);
+  if(cb) months[idx].comment=cb.value;
+  months[idx].closed=true;
+  await saveMonth(idx);
+};
+window.reopenMonth = async (idx)=>{ months[idx].closed=false; await saveMonth(idx); };
+
+window.addNewMonth = async ()=>{
+  const m=createMonth(new Date().toISOString().slice(0,10));
+  months.push(m);
+  activeIdx=months.length-1;
+  await saveMonth(activeIdx);
+};
+
+// ======= ARCHIVE =======
+window.openArchive = ()=>{
+  document.getElementById("archiveList").innerHTML = months.map((m,i)=>{
+    const ts=(parseFloat(m.salary1)||0)+(parseFloat(m.salary2)||0)+(parseFloat(m.salary3)||0);
+    const te=m.fixedExpenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0)+m.variableExpenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+    return `<div class="archive-item ${i===activeIdx?"cur":""}" onclick="goMonth(${i})">
+      <div><div class="ai-name">${monthLabel(m)} ${m.closed?"🔒":""}</div>
+      <div class="ai-sv">مدخر: ${(ts-te).toFixed(2)} ج</div></div>
+      <button class="ai-del" onclick="event.stopPropagation();delMonth('${m.id}',${i})">🗑</button>
+    </div>`;
+  }).join("");
+  document.getElementById("archiveModal").classList.add("open");
+};
+window.goMonth = (i)=>{ activeIdx=i; document.getElementById("archiveModal").classList.remove("open"); renderAll(); };
+window.delMonth = async (id,i)=>{
+  if(!confirm("حذف هذا الشهر نهائياً؟")) return;
+  await deleteMonthFromDB(id);
+  // Firestore listener سيحدّث months تلقائياً
+  document.getElementById("archiveModal").classList.remove("open");
+};
+
+// ======= REPORT =======
+window.openReport = (idx)=>{
+  const m=months[idx];
+  const ts=(parseFloat(m.salary1)||0)+(parseFloat(m.salary2)||0)+(parseFloat(m.salary3)||0);
+  const fe=m.fixedExpenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+  const ve=m.variableExpenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+  const te=fe+ve; const sv=ts-te;
+  let allItems=[...m.fixedExpenses.map(e=>({name:e.name,amount:parseFloat(e.amount)||0})),
+    ...m.variableExpenses.reduce((acc,e)=>{const f=acc.find(a=>a.name===e.name);if(f)f.amount+=parseFloat(e.amount)||0;else acc.push({name:e.name,amount:parseFloat(e.amount)||0});return acc;},[])];
+  allItems.sort((a,b)=>b.amount-a.amount);
+  const top=allItems.slice(0,5);
+  let tips=[];
+  if(sv<0) tips.push({t:"warn",m:"⚠️ مصروفاتك تتجاوز دخلك! راجع بنود الإنفاق."});
+  if(te/ts>0.8&&sv>=0) tips.push({t:"warn",m:"⚠️ تصرف أكثر من 80% من دخلك، حاول تقليل المصروفات."});
+  if(sv/ts>0.2) tips.push({t:"good",m:"✅ ممتاز! تدخر أكثر من 20% من دخلك."});
+  if(ve>fe) tips.push({t:"",m:"💡 المصروفات اليومية تتجاوز الثابتة، راجع عادات الإنفاق."});
+  if(!tips.length) tips.push({t:"",m:"💡 حافظ على نفس النمط المالي وحاول زيادة المدخرات تدريجياً."});
+
+  document.getElementById("reportBody").innerHTML=`
+    <div style="text-align:center;margin-bottom:20px;">
+      <div style="font-size:45px;">📋</div>
+      <div style="font-size:22px;font-weight:900;">تقرير شهر ${monthLabel(m)}</div>
+      <div style="color:var(--text2);font-size:13px;">${new Date().toLocaleDateString("ar-EG")}</div>
+    </div>
+    <div class="report-section"><h3>💵 الدخل</h3>
+      <div class="report-row"><span>مرتب المستشفى الأولى</span><span>${parseFloat(m.salary1)||0} ج</span></div>
+      <div class="report-row"><span>مرتب المستشفى الثانية</span><span>${parseFloat(m.salary2)||0} ج</span></div>
+      <div class="report-row"><span>مرتب إضافي</span><span>${parseFloat(m.salary3)||0} ج</span></div>
+      <div class="report-row report-total" style="color:var(--success)"><span>إجمالي الدخل</span><span>${ts.toFixed(2)} ج</span></div>
+    </div>
+    <div class="report-section"><h3>🏠 الثابت</h3>
+      ${m.fixedExpenses.map(e=>`<div class="report-row"><span>${e.name}</span><span>${parseFloat(e.amount)||0} ج</span></div>`).join("")}
+      <div class="report-row" style="color:var(--warning)"><span>الإجمالي</span><span>${fe.toFixed(2)} ج</span></div>
+    </div>
+    <div class="report-section"><h3>🛒 اليومي</h3>
+      ${m.variableExpenses.map(e=>`<div class="report-row"><span>${e.name}</span><span>${parseFloat(e.amount)||0} ج</span></div>`).join("")}
+      <div class="report-row" style="color:var(--warning)"><span>الإجمالي</span><span>${ve.toFixed(2)} ج</span></div>
+    </div>
+    <div class="report-section"><h3>📊 الملخص</h3>
+      <div class="report-row report-total" style="color:var(--danger)"><span>إجمالي المصروفات</span><span>${te.toFixed(2)} ج</span></div>
+      <div class="report-row report-total" style="color:${sv>=0?"var(--success)":"var(--danger)"}"><span>${sv>=0?"المدخر":"العجز"}</span><span>${Math.abs(sv).toFixed(2)} ج</span></div>
+      <div class="report-row"><span>نسبة الإنفاق</span><span>${ts>0?((te/ts)*100).toFixed(1):0}%</span></div>
+    </div>
+    ${top.length?`<div class="report-section"><h3>📈 أكثر البنود إنفاقاً</h3>
+      ${top.map(it=>`<div class="analysis-item"><span>${it.name}</span><span style="font-weight:700;color:var(--warning)">${it.amount.toFixed(2)} ج</span></div>
+      <div class="analysis-bar" style="width:${te>0?Math.min((it.amount/te)*100,100):0}%"></div>`).join("")}
+    </div>`:""}
+    <div class="report-section"><h3>💡 نصائح</h3>
+      ${tips.map(t=>`<div class="tip-item ${t.t}">${t.m}</div>`).join("")}
+    </div>
+    ${m.comment?`<div class="report-section"><h3>📝 ملاحظات</h3><div style="padding:10px;background:var(--bg3);border-radius:9px;font-size:13px;">${m.comment}</div></div>`:""}
+  `;
+  document.getElementById("reportModal").classList.add("open");
+};
+
+// ======= TOAST =======
+function showToast(msg){
+  const t=document.createElement("div");
+  t.style.cssText="position:fixed;bottom:25px;left:50%;transform:translateX(-50%);background:#6c63ff;color:white;padding:11px 22px;border-radius:11px;font-family:Cairo,sans-serif;font-weight:700;z-index:9999;font-size:14px;";
+  t.textContent=msg; document.body.appendChild(t);
+  setTimeout(()=>t.remove(),2500);
+}
+window.showToast = showToast;
+
+</script>
+</body>
+</html>
